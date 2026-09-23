@@ -1,0 +1,11 @@
+[package]
+name = "rusty_rich"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+complex-bessel = "0.3.0"
+faer = "0.24.4"
+nalgebra = "0.35.0"
+num-complex = "0.4.6"
+plotly = "0.14.1"

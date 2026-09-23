@@ -1,0 +1,67 @@
+{
+  "version": 1,
+  "workspacePath": "/Users/ben.martin/Coursework/WavefieldImaging/A1/rusty_rich",
+  "entries": [
+    {
+      "command": "cargo run",
+      "timestamp": 1790115353330,
+      "cwd": "/Users/ben.martin/Coursework/WavefieldImaging/A1/rusty_rich"
+    },
+    {
+      "command": "{ source \"/var/folders/kt/z1c76gp52m72q86f46c11rqr0000gp/T/wshist_ukn1b.sh\" && rm \"/var/folders/kt/z1c76gp52m72q86f46c11rqr0000gp/T/wshist_ukn1b.sh\"; } 2>/dev/null",
+      "timestamp": 1790115505865,
+      "cwd": "/Users/ben.martin/Coursework/WavefieldImaging/A1/rusty_rich"
+    },
+    {
+      "command": "cargo add nalgebra",
+      "timestamp": 1790115729711,
+      "cwd": "/Users/ben.martin/Coursework/WavefieldImaging/A1/rusty_rich"
+    },
+    {
+      "command": "cargo add num-complex",
+      "timestamp": 1790115829885,
+      "cwd": "/Users/ben.martin/Coursework/WavefieldImaging/A1/rusty_rich"
+    },
+    {
+      "command": "cargo run",
+      "timestamp": 1790115999765,
+      "cwd": "/Users/ben.martin/Coursework/WavefieldImaging/A1/rusty_rich"
+    },
+    {
+      "command": "cargo add plotly",
+      "timestamp": 1790116820714,
+      "cwd": "/Users/ben.martin/Coursework/WavefieldImaging/A1/rusty_rich"
+    },
+    {
+      "command": "cargo run",
+      "timestamp": 1790117179065,
+      "cwd": "/Users/ben.martin/Coursework/WavefieldImaging/A1/rusty_rich"
+    },
+    {
+      "command": "cargo add complex-bessel",
+      "timestamp": 1790119382362,
+      "cwd": "/Users/ben.martin/Coursework/WavefieldImaging/A1/rusty_rich"
+    },
+    {
+      "command": "cargo run",
+      "timestamp": 1790120613158,
+      "cwd": "/Users/ben.martin/Coursework/WavefieldImaging/A1/rusty_rich"
+    },
+    {
+      "command": "cargo run --release",
+      "timestamp": 1790180398409,
+      "cwd": "/Users/ben.martin/Coursework/WavefieldImaging/A1/rusty_rich"
+    },
+    {
+      "command": "git init",
+      "timestamp": 1790194809437,
+      "cwd": "/Users/ben.martin/Coursework/WavefieldImaging/A1/rusty_rich"
+    },
+    {
+      "command": "git status",
+      "timestamp": 1790194811535,
+      "cwd": "/Users/ben.martin/Coursework/WavefieldImaging/A1/rusty_rich"
+    }
+  ],
+  "lastUpdated": 1790194811535
+}
