@@ -61,7 +61,42 @@
       "command": "git status",
       "timestamp": 1790194811535,
       "cwd": "/Users/ben.martin/Coursework/WavefieldImaging/A1/rusty_rich"
+    },
+    {
+      "command": "git add .",
+      "timestamp": 1790194813300,
+      "cwd": "/Users/ben.martin/Coursework/WavefieldImaging/A1/rusty_rich"
+    },
+    {
+      "command": "git commit -m \"working standard n^2 version\"",
+      "timestamp": 1790194822710,
+      "cwd": "/Users/ben.martin/Coursework/WavefieldImaging/A1/rusty_rich"
+    },
+    {
+      "command": "git checkout -b feature/fftaccel",
+      "timestamp": 1790194833356,
+      "cwd": "/Users/ben.martin/Coursework/WavefieldImaging/A1/rusty_rich"
+    },
+    {
+      "command": "cargo add rustfft",
+      "timestamp": 1790198217734,
+      "cwd": "/Users/ben.martin/Coursework/WavefieldImaging/A1/rusty_rich"
+    },
+    {
+      "command": "cargo run",
+      "timestamp": 1790202061776,
+      "cwd": "/Users/ben.martin/Coursework/WavefieldImaging/A1/rusty_rich"
+    },
+    {
+      "command": "cargo run --release",
+      "timestamp": 1790205933508,
+      "cwd": "/Users/ben.martin/Coursework/WavefieldImaging/A1/rusty_rich"
+    },
+    {
+      "command": "git status",
+      "timestamp": 1790206368490,
+      "cwd": "/Users/ben.martin/Coursework/WavefieldImaging/A1/rusty_rich"
     }
   ],
-  "lastUpdated": 1790194811535
+  "lastUpdated": 1790206368490
 }

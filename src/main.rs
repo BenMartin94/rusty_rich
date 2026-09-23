@@ -7,6 +7,32 @@ use complex_bessel::besselj;
 use std::time::Instant;
 use faer::{Mat, c64};
 use faer::prelude::Solve;
+use rustfft::{FftDirection, FftPlanner};
+
+// nalgebra is column-major, so the columns form contiguous chunks that one process() call handles.
+fn fft_columns(m: &mut DMatrix<Complex<f64>>, planner: &mut FftPlanner<f64>, dir: FftDirection) {
+    let fft = planner.plan_fft(m.nrows(), dir);
+    fft.process(m.as_mut_slice());
+}
+
+fn fft2_dir(input: &DMatrix<Complex<f64>>, dir: FftDirection) -> DMatrix<Complex<f64>> {
+    let mut planner = FftPlanner::new();
+    let mut out = input.clone();
+    fft_columns(&mut out, &mut planner, dir);
+    let mut out_t = out.transpose();
+    fft_columns(&mut out_t, &mut planner, dir);
+    out_t.transpose()
+}
+
+fn fft2(input: &DMatrix<Complex<f64>>) -> DMatrix<Complex<f64>> {
+    fft2_dir(input, FftDirection::Forward)
+}
+
+// rustfft does not normalize, so scale by 1/(N*M) here.
+fn ifft2(input: &DMatrix<Complex<f64>>) -> DMatrix<Complex<f64>> {
+    let scale = 1.0 / (input.nrows() * input.ncols()) as f64;
+    fft2_dir(input, FftDirection::Inverse) * Complex::new(scale, 0.0)
+}
 
 fn to_faer(m: &DMatrix<Complex<f64>>) -> Mat<c64> {
     Mat::from_fn(m.nrows(), m.ncols(), |i, j| c64::new(m[(i, j)].re, m[(i, j)].im))
@@ -49,7 +75,7 @@ fn circle(eps: &mut DMatrix<Complex<f64>>, radius: f64, center: (f64, f64)) {
             
 }
 
-fn plot_matrix(matrix: &DMatrix<f64>) {
+fn plot_matrix(matrix: &DMatrix<f64>, title: &str) {
     // plotly puts z rows on the y-axis, but our matrices index (x, y)
     let z: Vec<Vec<f64>> = (0..matrix.ncols())
         .map(|j| (0..matrix.nrows()).map(|i| matrix[(i, j)]).collect())
@@ -60,6 +86,7 @@ fn plot_matrix(matrix: &DMatrix<f64>) {
     plot.add_trace(heatmap);
 
     let layout = Layout::new()
+        .title(title)
         .x_axis(Axis::new().constrain(plotly::layout::AxisConstrain::Domain))
         .y_axis(Axis::new().scale_anchor("x").scale_ratio(1.0))
         .auto_size(true);
@@ -116,6 +143,71 @@ fn build_coeffs(A: &mut DMatrix<Complex<f64>>, contrast: &DMatrix<Complex<f64>>,
 
 } 
 
+fn build_kernel(k_b: Complex<f64>) -> DMatrix<Complex<f64>> {
+    let mut kernel = DMatrix::<Complex<f64>>::zeros(2*Nx-1, 2*Ny-1);
+    let a = (dx*dy/pi).sqrt();
+    let besselj_ka = besselj(1.0, k_b*a).unwrap();
+    let hankel2_ka = hankel2(1.0, k_b*a).unwrap();
+    for p in -(Nx as i32 - 1)..=(Nx as i32 - 1){
+        for q in -(Ny as i32 - 1)..=(Ny as i32 - 1){
+            let m = if p >= 0 { p } else { p + (2*Nx as i32 - 1) } as usize;
+            let n = if q >= 0 { q } else { q + (2*Ny as i32 - 1) } as usize;
+            let rho_pq = ((p as f64 * dx).powi(2) + (q as f64 * dy).powi(2)).sqrt();
+            if p == 0 && q == 0 {
+                kernel[(m, n)] = Complex::new(0.0, 1.0/2.0) * (pi*k_b*a*hankel2_ka-Complex::new(0.0, 2.0));
+            } else {
+                kernel[(m, n)] = Complex::new(0.0, 1.0*pi*a/2.0)*k_b*besselj_ka*hankel2(0.0, k_b*rho_pq).unwrap();
+            }
+        }
+    }
+
+    // print the kernel
+    kernel
+}
+
+fn iter_solve(kernel: DMatrix<Complex<f64>>, contrast: DMatrix<Complex<f64>>, u_inc: DMatrix<Complex<f64>>, max_iter: usize, tol: f64) -> DMatrix<Complex<f64>> {
+    let mut u_tot = u_inc.clone();
+    let mut kernel_fft = fft2(&kernel);
+    let kernel_nrows = kernel.nrows();
+    let kernel_ncols = kernel.ncols();
+
+    let mut contrast_src = DMatrix::<Complex<f64>>::zeros(kernel_nrows, kernel_ncols); // allocated space for my contrast sources
+
+    let mut residual = f64::MAX;
+    for iter in 0..max_iter {
+        // compute the contrast source
+        let temp_contrast_src = &contrast.component_mul(&u_tot);
+        // put temp_contrast_src into the top left corner of contrast_src
+        for i in 0..Nx {
+            for j in 0..Ny {
+                contrast_src[(i, j)] = temp_contrast_src[(i, j)];
+            }
+        }
+        // fft the contrast source
+        let contrast_src_fft = fft2(&contrast_src);
+        // element-wise multiply with the kernel in the frequency domain
+        let field_fft = contrast_src_fft.component_mul(&kernel_fft);
+        // inverse fft to get the scattered field in the spatial domain
+        let padded_field = ifft2(&field_fft);
+        // extract the top left Nx x Ny part of the scattered field
+        let mut field = DMatrix::<Complex<f64>>::zeros(Nx, Ny);
+        for i in 0..Nx {
+            for j in 0..Ny {
+                field[(i, j)] = padded_field[(i, j)];
+            }
+        }
+        residual = (&field+&u_tot-&u_inc).norm();
+        u_tot = &u_inc - &field; // update the total field
+        
+        println!("Iteration {}: residual = {}", iter, residual);
+        if residual < tol {
+            println!("Converged after {} iterations with residual {}", iter, residual);
+            break;
+        }
+    }
+    u_tot
+}
+
 fn inc_field(k_b: Complex<f64>) -> DMatrix<Complex<f64>> {
     let mut u_inc = DMatrix::<Complex<f64>>::zeros(Nx, Ny);
     for i in 0..Nx {
@@ -131,6 +223,7 @@ fn inc_field(k_b: Complex<f64>) -> DMatrix<Complex<f64>> {
 
 
 fn main() {
+    
     let t_total = Instant::now();
 
     if lambda/10.0 < dx || lambda/10.0 < dy {
@@ -146,13 +239,22 @@ fn main() {
 
     let k_b: Complex<f64> = Complex::new(omega, 0.0) * (epsilon0 * background_permittivity * mu0).sqrt(); // wave number in the background
 
-    println!("Omega: {}", omega);
-    println!("k_b: {}", k_b);
-
     let u_inc = inc_field(k_b);
-    let u_inc_flat = DMatrix::<Complex<f64>>::from_iterator(Nx*Ny, 1, u_inc.transpose().iter().cloned());
-    plot_matrix(&u_inc.map(|c| c.re));
+    plot_matrix(&u_inc.map(|c| c.re), "Incident field (real part)");
 
+    // FFT-accelerated iterative solve
+    println!("FFT solve...");
+    let t_fft = Instant::now();
+    let kernel = build_kernel(k_b);
+    let t_kernel = t_fft.elapsed();
+    let u_tot = iter_solve(kernel, contrast.clone(), u_inc.clone(), 100, 1e-6);
+    let t_fft = t_fft.elapsed();
+    println!("  build kernel: {:.3?}", t_kernel);
+    println!("FFT solve total: {:.3?}", t_fft);
+
+    // Direct N^2 build + LU solve
+    let u_inc_flat = DMatrix::<Complex<f64>>::from_iterator(Nx*Ny, 1, u_inc.transpose().iter().cloned());
+    let t_direct = Instant::now();
     let mut A = DMatrix::<Complex<f64>>::zeros(Nx*Ny, Nx*Ny);
     println!("Building coefficient matrix A...");
     let t_build = Instant::now();
@@ -175,13 +277,23 @@ fn main() {
         (0..Nx*Ny).map(|i| Complex::new(x_faer[(i, 0)].re, x_faer[(i, 0)].im))
     );
     println!("Solve: {:.3?}", t_solve.elapsed());
+    let t_direct = t_direct.elapsed();
+    println!("Direct solve total: {:.3?}", t_direct);
+    let u_tot_direct = DMatrix::<Complex<f64>>::from_iterator(Ny, Nx, u_tot_flat.iter().cloned()).transpose();
+
+    println!("----");
+    println!("Grid {}x{} ({} unknowns)", Nx, Ny, Nx*Ny);
+    println!("  FFT:    {:.3?}", t_fft);
+    println!("  Direct: {:.3?}", t_direct);
+    println!("  Speedup: {:.1}x", t_direct.as_secs_f64() / t_fft.as_secs_f64());
+    println!("  Relative difference FFT vs direct: {:.3e}", (&u_tot - &u_tot_direct).norm() / u_tot_direct.norm());
     println!("Total (before plotting): {:.3?}", t_total.elapsed());
-    let u_tot = DMatrix::<Complex<f64>>::from_iterator(Ny, Nx, u_tot_flat.iter().cloned()).transpose();
-    plot_matrix(&u_tot.map(|c| c.re));
 
-    let uscattered_flat = &u_tot_flat - &u_inc_flat;
-    let uscattered = DMatrix::<Complex<f64>>::from_iterator(Ny, Nx, uscattered_flat.iter().cloned()).transpose();
-    plot_matrix(&uscattered.map(|c| c.norm()));
+    plot_matrix(&u_tot.map(|c| c.re), "Total field, FFT solver (real part)");
+    let uscattered = &u_tot - &u_inc;
+    plot_matrix(&uscattered.map(|c| c.norm()), "Scattered field, FFT solver (magnitude)");
 
-
+    plot_matrix(&u_tot_direct.map(|c| c.re), "Total field, direct solver (real part)");
+    let uscattered_direct = &u_tot_direct - &u_inc;
+    plot_matrix(&uscattered_direct.map(|c| c.norm()), "Scattered field, direct solver (magnitude)");
 }
