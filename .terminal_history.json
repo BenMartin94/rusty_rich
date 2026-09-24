@@ -96,7 +96,22 @@
       "command": "git status",
       "timestamp": 1790206368490,
       "cwd": "/Users/ben.martin/Coursework/WavefieldImaging/A1/rusty_rich"
+    },
+    {
+      "command": "git add .",
+      "timestamp": 1790206370614,
+      "cwd": "/Users/ben.martin/Coursework/WavefieldImaging/A1/rusty_rich"
+    },
+    {
+      "command": "git commit -m \"much faster now\"",
+      "timestamp": 1790206377294,
+      "cwd": "/Users/ben.martin/Coursework/WavefieldImaging/A1/rusty_rich"
+    },
+    {
+      "command": "cargo run --release",
+      "timestamp": 1790208923039,
+      "cwd": "/Users/ben.martin/Coursework/WavefieldImaging/A1/rusty_rich"
     }
   ],
-  "lastUpdated": 1790206368490
+  "lastUpdated": 1790208923039
 }
