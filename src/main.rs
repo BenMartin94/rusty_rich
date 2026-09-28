@@ -61,7 +61,8 @@ const omega: f64 = 2.0 * pi * frequency; // Angular frequency
 const lambda: f64 = CC / frequency; // Wavelength
 
 const background_permittivity: Complex<f64> = Complex::new(1.0, 0.0); // Permittivity of the background
-const circle_permittivity: Complex<f64> = Complex::new(4.0, 0.0); // Permittivity of the circle
+const richy_permittivity: Complex<f64> = Complex::new(4.0, 0.0); // Permittivity of the circle
+const colin_permittivity: Complex<f64> = Complex::new(1.1, -0.05); // Permittivity of the colin target
 
 // top left corner of the domain index 0, 0 is the origin of the domain too. 
 
@@ -73,7 +74,7 @@ fn circle(eps: &mut DMatrix<Complex<f64>>, radius: f64, center: (f64, f64)) {
             let y_j = dy * j as f64;
             let distance = ((x_i - cx).powi(2) + (y_j - cy).powi(2)).sqrt();
             if distance <= radius {
-                eps[(i, j)] = circle_permittivity; // Inside the circle
+                eps[(i, j)] = colin_permittivity; // Inside the circle
             } else {
                 eps[(i, j)] = background_permittivity; // Outside the circle
             }
@@ -91,7 +92,7 @@ fn richys_target(inner_radius: f64, outer_radius: f64) -> DMatrix<Complex<f64>> 
             let y_j = dy * j as f64;
             let distance = ((x_i - x_meters/2.0).powi(2) + (y_j - y_meters/2.0).powi(2)).sqrt();
             if distance <= outer_radius && distance >= inner_radius {
-                eps[(i, j)] = circle_permittivity; // Inside 
+                eps[(i, j)] = richy_permittivity; // Inside 
             } else {
                 eps[(i, j)] = background_permittivity; // Outside 
             }
@@ -307,7 +308,7 @@ fn inc_field(k_b: Complex<f64>) -> DMatrix<Complex<f64>> {
         for j in 0..Ny {
             let x_i = dx * i as f64;
             let y_j = dy * j as f64;
-            u_inc[(i, j)] = Complex::new(1.0, 0.0) * (Complex::new(0.0, -1.0) * k_b * Complex::new(x_i, 0.0)).exp(); // plane wave traveling in the (1,0) direction
+            u_inc[(i, j)] = Complex::new(1.0, 0.0) * (Complex::new(0.0, -1.0) * k_b * Complex::new(x_i - x_meters/2.0, 0.0)).exp(); // plane wave traveling in the (1,0) direction
         }
     }
     u_inc
@@ -331,7 +332,7 @@ fn scat_at_obs(k_b: Complex<f64>, contrast: &DMatrix<Complex<f64>>, u_tot: &DMat
 fn inc_at_obs(k_b: Complex<f64>, obs: (f64, f64)) -> Complex<f64> {
     let x = obs.0;
     let y = obs.1;
-    Complex::new(1.0, 0.0) * (Complex::new(0.0, -1.0) * k_b * Complex::new(x, 0.0)).exp() // plane wave traveling in the (1,0) direction
+    Complex::new(1.0, 0.0) * (Complex::new(0.0, -1.0) * k_b * Complex::new(x-x_meters/2.0, 0.0)).exp() // plane wave traveling in the (1,0) direction
 }
 
 fn sample_tot(points: &Vec<(f64, f64)>, u_tot: &DMatrix<Complex<f64>>) -> Vec<Complex<f64>> {
@@ -352,6 +353,17 @@ fn receivers_circle(num_receivers: usize, radius: f64) -> Vec<(f64, f64)> {
     let mut receivers = Vec::new();
     for n in 0..num_receivers {
         let angle = std::f64::consts::PI * n as f64 / num_receivers as f64; // just cover a half circle
+        let x = x_meters/2.0 + radius * angle.cos();
+        let y = y_meters/2.0 + radius * angle.sin();
+        receivers.push((x, y));
+    }
+    receivers
+}
+
+fn receivers_full_circle(num_receivers: usize, radius: f64) -> Vec<(f64, f64)> {
+    let mut receivers = Vec::new();
+    for n in 0..num_receivers {
+        let angle = 2.0 * std::f64::consts::PI * n as f64 / num_receivers as f64; // full circle
         let x = x_meters/2.0 + radius * angle.cos();
         let y = y_meters/2.0 + radius * angle.sin();
         receivers.push((x, y));
@@ -402,7 +414,7 @@ fn main() {
     circle(&mut eps, 0.3*lambda, (x_meters/2.0, y_meters/2.0)); // Circle with radius 0.05 meters at center (0.15, 0.15)
     let richys_eps = richys_target(0.25*lambda, 0.3*lambda);
     plot_matrix(&richys_eps.map(|c| c.re), "Richy's target permittivity (real part)");
-    let contrast = contrast(&richys_eps, background_permittivity);
+    let rich_contrast = contrast(&richys_eps, background_permittivity);
 
     let k_b: Complex<f64> = Complex::new(omega, 0.0) * (epsilon0 * background_permittivity * mu0).sqrt(); // wave number in the background
 
@@ -414,7 +426,7 @@ fn main() {
     let t_fft = Instant::now();
     let kernel = build_kernel(k_b);
     let t_kernel = t_fft.elapsed();
-    let u_tot = gmres_solve(&kernel, &contrast, &u_inc, 30, 500, 1e-6);
+    let u_tot = gmres_solve(&kernel, &rich_contrast, &u_inc, 30, 500, 1e-6);
     let t_fft = t_fft.elapsed();
     println!("  build kernel: {:.3?}", t_kernel);
     println!("FFT solve total: {:.3?}", t_fft);
@@ -423,18 +435,31 @@ fn main() {
     let num_receivers = 128;
 
     let phi: Vec<f64> = (0..num_receivers).map(|n| 180.0 * n as f64 / num_receivers as f64).collect();
+    let full_circle_phi: Vec<f64> = (0..num_receivers).map(|n| 360.0 * n as f64 / num_receivers as f64).collect();
     let shell_points = receivers_circle(128, 0.275*lambda);
     let u_tot_shell = sample_tot(&shell_points, &u_tot);
     let u_tot_shell_mag: Vec<f64> = u_tot_shell.iter().map(|c| c.norm()).collect();
-    plot_line(&phi, &u_tot_shell_mag, "Total field at shell", "phi (degrees)", "|u_tot|");
+    plot_line(&phi, &u_tot_shell_mag, "Figure 3 Recreated", "phi (degrees)", "|E|");
 
     // Compute scattered field at receivers
     // find the echo width now
     let receivers = receivers_circle(num_receivers, 2.5*lambda);
-    let scattered_data = receiver_data(k_b, &contrast, &u_tot, &receivers);
+    let scattered_data = receiver_data(k_b, &rich_contrast, &u_tot, &receivers);
     let incident_data = inc_at_receivers(k_b, &receivers);
     let echo_widths = echo_width(&scattered_data, &incident_data, 2.5*lambda);
-    plot_line(&phi, &echo_widths, "Echo width vs phi", "phi (degrees)", "Echo width");
+    plot_line(&phi, &echo_widths, "Figure 4 Recreated", "phi (degrees)", "Echo width/lambda");
+
+    // time for colins one
+    let colin_contrast = contrast(&eps, background_permittivity);
+    let colin_u_tot = gmres_solve(&kernel, &colin_contrast, &u_inc, 30, 500, 1e-6);
+
+    let colin_receivers = receivers_full_circle(num_receivers, 0.5*lambda);
+    let colin_scattered_data = receiver_data(k_b, &colin_contrast, &colin_u_tot, &colin_receivers);
+    plot_line(&full_circle_phi, &colin_scattered_data.iter().map(|c| c.norm()).collect::<Vec<f64>>(), "Colin's target scattered field", "observation angle", "|E_sct|");
+    plot_line(&full_circle_phi, &colin_scattered_data.iter().map(|c| c.arg()).collect::<Vec<f64>>(), "Colin's target scattered field", "observation angle", "E_sct phase");
+
+
+    
     
 
     // Direct N^2 build + LU solve
