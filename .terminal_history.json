@@ -156,7 +156,42 @@
       "command": "git status",
       "timestamp": 1790631084690,
       "cwd": "/Users/ben.martin/Coursework/WavefieldImaging/A1/rusty_rich"
+    },
+    {
+      "command": "git add .",
+      "timestamp": 1790631087887,
+      "cwd": "/Users/ben.martin/Coursework/WavefieldImaging/A1/rusty_rich"
+    },
+    {
+      "command": "git commit -m \"produces all the plots needed for A1\"",
+      "timestamp": 1790631097974,
+      "cwd": "/Users/ben.martin/Coursework/WavefieldImaging/A1/rusty_rich"
+    },
+    {
+      "command": "git checkout -b feature/api",
+      "timestamp": 1790631107443,
+      "cwd": "/Users/ben.martin/Coursework/WavefieldImaging/A1/rusty_rich"
+    },
+    {
+      "command": "make up",
+      "timestamp": 1790632475733,
+      "cwd": "/Users/ben.martin/Coursework/WavefieldImaging/A1/rusty_rich"
+    },
+    {
+      "command": "git status",
+      "timestamp": 1790633164755,
+      "cwd": "/Users/ben.martin/Coursework/WavefieldImaging/A1/rusty_rich"
+    },
+    {
+      "command": "git remote -v",
+      "timestamp": 1790633167571,
+      "cwd": "/Users/ben.martin/Coursework/WavefieldImaging/A1/rusty_rich"
+    },
+    {
+      "command": "git status",
+      "timestamp": 1790633174129,
+      "cwd": "/Users/ben.martin/Coursework/WavefieldImaging/A1/rusty_rich"
     }
   ],
-  "lastUpdated": 1790631084690
+  "lastUpdated": 1790633174129
 }
