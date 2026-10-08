@@ -10,6 +10,8 @@ use num_complex::Complex;
 use serde::{Deserialize, Serialize};
 use tower_http::cors::CorsLayer;
 use tower_http::services::ServeDir;
+use tower_http::set_header::SetResponseHeaderLayer;
+use axum::http::{header, HeaderValue};
 use uuid::Uuid;
 
 use crate::solver::{self, Domain, Medium};
@@ -445,4 +447,10 @@ pub fn app() -> Router {
         .with_state(state)
         .layer(CorsLayer::permissive())
         .fallback_service(ServeDir::new("frontend"))
+        // Without this, browsers heuristically cache app.js and keep running
+        // stale frontend code after edits; no-cache forces a cheap ETag revalidation.
+        .layer(SetResponseHeaderLayer::overriding(
+            header::CACHE_CONTROL,
+            HeaderValue::from_static("no-cache"),
+        ))
 }

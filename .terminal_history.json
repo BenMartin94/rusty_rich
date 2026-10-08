@@ -191,7 +191,177 @@
       "command": "git status",
       "timestamp": 1790633174129,
       "cwd": "/Users/ben.martin/Coursework/WavefieldImaging/A1/rusty_rich"
+    },
+    {
+      "command": "git add .",
+      "timestamp": 1790633176481,
+      "cwd": "/Users/ben.martin/Coursework/WavefieldImaging/A1/rusty_rich"
+    },
+    {
+      "command": "git commit -m \"frontend is ready\"",
+      "timestamp": 1790633237331,
+      "cwd": "/Users/ben.martin/Coursework/WavefieldImaging/A1/rusty_rich"
+    },
+    {
+      "command": "git push",
+      "timestamp": 1790633239168,
+      "cwd": "/Users/ben.martin/Coursework/WavefieldImaging/A1/rusty_rich"
+    },
+    {
+      "command": "git remote add origin git@github.com:BenMartin94/rusty_rich.git\ngit branch -M main\ngit push -u origin main",
+      "timestamp": 1790633274979,
+      "cwd": "/Users/ben.martin/Coursework/WavefieldImaging/A1/rusty_rich"
+    },
+    {
+      "command": "git pushg",
+      "timestamp": 1790633281622,
+      "cwd": "/Users/ben.martin/Coursework/WavefieldImaging/A1/rusty_rich"
+    },
+    {
+      "command": "git push",
+      "timestamp": 1790633284606,
+      "cwd": "/Users/ben.martin/Coursework/WavefieldImaging/A1/rusty_rich"
+    },
+    {
+      "command": "git status",
+      "timestamp": 1790633293991,
+      "cwd": "/Users/ben.martin/Coursework/WavefieldImaging/A1/rusty_rich"
+    },
+    {
+      "command": "git branch",
+      "timestamp": 1790633379319,
+      "cwd": "/Users/ben.martin/Coursework/WavefieldImaging/A1/rusty_rich"
+    },
+    {
+      "command": "make image",
+      "timestamp": 1790652826329,
+      "cwd": "/Users/ben.martin/Coursework/WavefieldImaging/A1/rusty_rich"
+    },
+    {
+      "command": "make docker-run",
+      "timestamp": 1790652878982,
+      "cwd": "/Users/ben.martin/Coursework/WavefieldImaging/A1/rusty_rich"
+    },
+    {
+      "command": "make image",
+      "timestamp": 1790653208415,
+      "cwd": "/Users/ben.martin/Coursework/WavefieldImaging/A1/rusty_rich"
+    },
+    {
+      "command": "make docker-run",
+      "timestamp": 1790653391617,
+      "cwd": "/Users/ben.martin/Coursework/WavefieldImaging/A1/rusty_rich"
+    },
+    {
+      "command": "make image",
+      "timestamp": 1790653405571,
+      "cwd": "/Users/ben.martin/Coursework/WavefieldImaging/A1/rusty_rich"
+    },
+    {
+      "command": "make docker-run",
+      "timestamp": 1790653475694,
+      "cwd": "/Users/ben.martin/Coursework/WavefieldImaging/A1/rusty_rich"
+    },
+    {
+      "command": "make up",
+      "timestamp": 1790653939845,
+      "cwd": "/Users/ben.martin/Coursework/WavefieldImaging/A1/rusty_rich"
+    },
+    {
+      "command": "make image",
+      "timestamp": 1790654110644,
+      "cwd": "/Users/ben.martin/Coursework/WavefieldImaging/A1/rusty_rich"
+    },
+    {
+      "command": "make docker-run",
+      "timestamp": 1790654375413,
+      "cwd": "/Users/ben.martin/Coursework/WavefieldImaging/A1/rusty_rich"
+    },
+    {
+      "command": "docker login",
+      "timestamp": 1790698671718,
+      "cwd": "/Users/ben.martin/Coursework/WavefieldImaging/A1/rusty_rich"
+    },
+    {
+      "command": "docker tag rusty_rich:latest benmartin94/rusty_rich:latest",
+      "timestamp": 1790698718989,
+      "cwd": "/Users/ben.martin/Coursework/WavefieldImaging/A1/rusty_rich"
+    },
+    {
+      "command": "docker push benmartin94/rusty_rich:latest",
+      "timestamp": 1790698737251,
+      "cwd": "/Users/ben.martin/Coursework/WavefieldImaging/A1/rusty_rich"
+    },
+    {
+      "command": "make docker-build-amd64",
+      "timestamp": 1790698940168,
+      "cwd": "/Users/ben.martin/Coursework/WavefieldImaging/A1/rusty_rich"
+    },
+    {
+      "command": "docker push benmartin94/rusty_rich:latest",
+      "timestamp": 1790699177588,
+      "cwd": "/Users/ben.martin/Coursework/WavefieldImaging/A1/rusty_rich"
+    },
+    {
+      "command": "cargo run --release",
+      "timestamp": 1790706531104,
+      "cwd": "/Users/ben.martin/Coursework/WavefieldImaging/A1/rusty_rich"
+    },
+    {
+      "command": "{ source \"/var/folders/kt/z1c76gp52m72q86f46c11rqr0000gp/T/wshist_tz622q.sh\" && rm \"/var/folders/kt/z1c76gp52m72q86f46c11rqr0000gp/T/wshist_tz622q.sh\"; } 2>/dev/null",
+      "timestamp": 1790785477372,
+      "cwd": "/Users/ben.martin/Coursework/WavefieldImaging/A1/rusty_rich"
+    },
+    {
+      "command": "{ source \"/var/folders/kt/z1c76gp52m72q86f46c11rqr0000gp/T/wshist_vywaz.sh\" && rm \"/var/folders/kt/z1c76gp52m72q86f46c11rqr0000gp/T/wshist_vywaz.sh\"; } 2>/dev/null",
+      "timestamp": 1790785478821,
+      "cwd": "/Users/ben.martin/Coursework/WavefieldImaging/A1/rusty_rich"
+    },
+    {
+      "command": "{ source \"/var/folders/kt/z1c76gp52m72q86f46c11rqr0000gp/T/wshist_rz389.sh\" && rm \"/var/folders/kt/z1c76gp52m72q86f46c11rqr0000gp/T/wshist_rz389.sh\"; } 2>/dev/null",
+      "timestamp": 1790973059972,
+      "cwd": "/Users/ben.martin/Coursework/WavefieldImaging/A1/rusty_rich"
+    },
+    {
+      "command": "{ source \"/var/folders/kt/z1c76gp52m72q86f46c11rqr0000gp/T/wshist_pkv26.sh\" && rm \"/var/folders/kt/z1c76gp52m72q86f46c11rqr0000gp/T/wshist_pkv26.sh\"; } 2>/dev/null",
+      "timestamp": 1790973061836,
+      "cwd": "/Users/ben.martin/Coursework/WavefieldImaging/A1/rusty_rich"
+    },
+    {
+      "command": "make up",
+      "timestamp": 1790975623944,
+      "cwd": "/Users/ben.martin/Coursework/WavefieldImaging/A1/rusty_rich"
+    },
+    {
+      "command": "{ source \"/var/folders/kt/z1c76gp52m72q86f46c11rqr0000gp/T/wshist_pfz5o.sh\" && rm \"/var/folders/kt/z1c76gp52m72q86f46c11rqr0000gp/T/wshist_pfz5o.sh\"; } 2>/dev/null",
+      "timestamp": 1791501686134,
+      "cwd": "/Users/ben.martin/Coursework/WavefieldImaging/A1/rusty_rich"
+    },
+    {
+      "command": "{ source \"/var/folders/kt/z1c76gp52m72q86f46c11rqr0000gp/T/wshist_za1dg8.sh\" && rm \"/var/folders/kt/z1c76gp52m72q86f46c11rqr0000gp/T/wshist_za1dg8.sh\"; } 2>/dev/null",
+      "timestamp": 1791501687545,
+      "cwd": "/Users/ben.martin/Coursework/WavefieldImaging/A1/rusty_rich"
+    },
+    {
+      "command": "git status",
+      "timestamp": 1791501704531,
+      "cwd": "/Users/ben.martin/Coursework/WavefieldImaging/A1/rusty_rich"
+    },
+    {
+      "command": "{ source \"/var/folders/kt/z1c76gp52m72q86f46c11rqr0000gp/T/wshist_yc2kazr.sh\" && rm \"/var/folders/kt/z1c76gp52m72q86f46c11rqr0000gp/T/wshist_yc2kazr.sh\"; } 2>/dev/null",
+      "timestamp": 1791501914546,
+      "cwd": "/Users/ben.martin/Coursework/WavefieldImaging/A1/rusty_rich"
+    },
+    {
+      "command": "{ source \"/var/folders/kt/z1c76gp52m72q86f46c11rqr0000gp/T/wshist_5qzaqq.sh\" && rm \"/var/folders/kt/z1c76gp52m72q86f46c11rqr0000gp/T/wshist_5qzaqq.sh\"; } 2>/dev/null",
+      "timestamp": 1791501915906,
+      "cwd": "/Users/ben.martin/Coursework/WavefieldImaging/A1/rusty_rich"
+    },
+    {
+      "command": "git status",
+      "timestamp": 1791502043516,
+      "cwd": "/Users/ben.martin/Coursework/WavefieldImaging/A1/rusty_rich"
     }
   ],
-  "lastUpdated": 1790633174129
+  "lastUpdated": 1791502043516
 }

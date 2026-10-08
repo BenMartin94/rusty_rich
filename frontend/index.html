@@ -4,12 +4,16 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Rusty Rich - Wavefield Imaging</title>
+  <link rel="icon" type="image/png" href="favicon.png" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <header>
-    <h1>Rusty Rich</h1>
-    <p class="subtitle">Paint a contrast profile - the field solves automatically and renders on the same canvas.</p>
+    <img class="logo" src="logo.png" alt="Rusty Rich logo" width="72" height="72" />
+    <div>
+      <h1>Rusty Rich</h1>
+      <p class="subtitle">Paint a contrast profile - the field solves automatically and renders on the same canvas.</p>
+    </div>
   </header>
 
   <main>
@@ -52,7 +56,9 @@
         <label>Display
           <select id="display-mode">
             <option value="total">Total field |E|</option>
+            <option value="total-anim">Total field (time-harmonic)</option>
             <option value="scattered">Scattered field |E|</option>
+            <option value="scattered-anim">Scattered field (time-harmonic)</option>
             <option value="contrast">Contrast only</option>
           </select>
         </label>

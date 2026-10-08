@@ -11,3 +11,12 @@ build:
 
 clean:
 	cargo clean
+
+image:
+	docker build -t rusty_rich:latest .
+
+docker-run:
+	docker run -p 8080:8080 -it --rm --name rusty_rich_container rusty_rich:latest
+
+docker-build-amd64:
+	docker buildx build --platform linux/amd64 -t benmartin94/rusty_rich:latest .

@@ -1,0 +1,4 @@
+target
+.git
+.terminal_history.json
+*.log
