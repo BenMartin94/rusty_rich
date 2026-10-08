@@ -81,6 +81,9 @@ pub struct SolveRequestDto {
     pub permittivity_im: Vec<f64>,
     #[serde(default)]
     pub incident_angle_deg: f64,
+    /// If set, illuminate with a line source here instead of a plane wave
+    /// (`incident_angle_deg` is then ignored).
+    pub source_position: Option<PointDto>,
     pub receivers: Vec<PointDto>,
     pub solver: Option<SolverParamsDto>,
 }
@@ -113,6 +116,23 @@ pub struct ReceiverResultDto {
     pub y: f64,
     pub scattered: ComplexDto,
     pub incident: ComplexDto,
+    /// `incident + scattered`.
+    pub total: ComplexDto,
+}
+
+fn receiver_results(receivers: &[(f64, f64)], result: &solver::SolveResult) -> Vec<ReceiverResultDto> {
+    receivers
+        .iter()
+        .zip(result.receiver_scattered.iter())
+        .zip(result.receiver_incident.iter())
+        .map(|((&(x, y), &scattered), &incident)| ReceiverResultDto {
+            x,
+            y,
+            scattered: scattered.into(),
+            incident: incident.into(),
+            total: (scattered + incident).into(),
+        })
+        .collect()
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -141,25 +161,41 @@ impl IntoResponse for ApiError {
     }
 }
 
-/// Validates the incoming request shape and converts it into the internal
-/// solver request. Cheap and synchronous - run before ever spawning compute.
-fn build_solve_request(req: &SolveRequestDto) -> Result<solver::SolveRequest, ApiError> {
-    let domain: Domain = req.domain.into();
+fn build_incident(incident_angle_deg: f64, source_position: Option<PointDto>) -> solver::IncidentWave {
+    match source_position {
+        Some(p) => solver::IncidentWave::PointSource { x: p.x, y: p.y },
+        None => solver::IncidentWave::PlaneWave { angle_rad: incident_angle_deg.to_radians() },
+    }
+}
+
+/// Validates the domain and permittivity grid shared by all solve requests.
+fn build_domain_and_permittivity(
+    domain: DomainDto,
+    permittivity_re: &[f64],
+    permittivity_im: &[f64],
+) -> Result<(Domain, Vec<Complex<f64>>), ApiError> {
+    let domain: Domain = domain.into();
     if domain.nx == 0 || domain.ny == 0 {
         return Err(ApiError::Validation("domain.nx and domain.ny must be > 0".into()));
     }
-    if req.permittivity_re.len() != domain.cells() || req.permittivity_im.len() != domain.cells() {
+    if permittivity_re.len() != domain.cells() || permittivity_im.len() != domain.cells() {
         return Err(ApiError::Validation(format!(
             "permittivity_re/permittivity_im must have nx*ny = {} entries",
             domain.cells()
         )));
     }
-    let permittivity: Vec<Complex<f64>> = req
-        .permittivity_re
+    let permittivity = permittivity_re
         .iter()
-        .zip(req.permittivity_im.iter())
+        .zip(permittivity_im.iter())
         .map(|(&re, &im)| Complex::new(re, im))
         .collect();
+    Ok((domain, permittivity))
+}
+
+/// Validates the incoming request shape and converts it into the internal
+/// solver request. Cheap and synchronous - run before ever spawning compute.
+fn build_solve_request(req: &SolveRequestDto) -> Result<solver::SolveRequest, ApiError> {
+    let (domain, permittivity) = build_domain_and_permittivity(req.domain, &req.permittivity_re, &req.permittivity_im)?;
     let receivers: Vec<(f64, f64)> = req.receivers.iter().map(|p| (p.x, p.y)).collect();
     let solver_params = req.solver.unwrap_or_default();
 
@@ -170,7 +206,7 @@ fn build_solve_request(req: &SolveRequestDto) -> Result<solver::SolveRequest, Ap
             background_permittivity: req.background_permittivity.into(),
         },
         permittivity,
-        incident_angle_rad: req.incident_angle_deg.to_radians(),
+        incident: build_incident(req.incident_angle_deg, req.source_position),
         receivers,
         restart: solver_params.restart.unwrap_or(30),
         max_iter: solver_params.max_iter.unwrap_or(500),
@@ -180,30 +216,138 @@ fn build_solve_request(req: &SolveRequestDto) -> Result<solver::SolveRequest, Ap
 
 fn run_solve(solve_req: solver::SolveRequest) -> Result<SolveResponseDto, String> {
     let domain = solve_req.domain;
-    let receivers = solve_req.receivers.clone();
     let start = std::time::Instant::now();
     let result = solver::solve(&solve_req)?;
     let solve_time_ms = start.elapsed().as_millis();
-
-    let receivers_out: Vec<ReceiverResultDto> = receivers
-        .iter()
-        .zip(result.receiver_scattered.iter())
-        .zip(result.receiver_incident.iter())
-        .map(|((&(x, y), &scattered), &incident)| ReceiverResultDto {
-            x,
-            y,
-            scattered: scattered.into(),
-            incident: incident.into(),
-        })
-        .collect();
 
     Ok(SolveResponseDto {
         domain: domain.into(),
         total_field: flatten_field(&result.total_field),
         scattered_field: flatten_field(&result.scattered_field),
-        receivers: receivers_out,
+        receivers: receiver_results(&solve_req.receivers, &result),
         solve_time_ms,
     })
+}
+
+// ---- multi-frequency endpoint (API only, not used by the frontend) ----
+
+/// One target permittivity grid solved at several frequencies. Only the
+/// receiver fields are returned, not the full grids.
+#[derive(Debug, Deserialize, Clone)]
+pub struct MultiFreqSolveRequestDto {
+    pub domain: DomainDto,
+    pub frequencies_hz: Vec<f64>,
+    /// Treated as frequency-independent, like the target permittivity.
+    pub background_permittivity: ComplexDto,
+    /// Absolute permittivity at every grid cell, flattened row-major as
+    /// `i * ny + j`, length `nx * ny`.
+    pub permittivity_re: Vec<f64>,
+    pub permittivity_im: Vec<f64>,
+    #[serde(default)]
+    pub incident_angle_deg: f64,
+    /// If set, illuminate with a line source here instead of a plane wave
+    /// (`incident_angle_deg` is then ignored).
+    pub source_position: Option<PointDto>,
+    pub receivers: Vec<PointDto>,
+    pub solver: Option<SolverParamsDto>,
+}
+
+#[derive(Debug, Serialize, Clone)]
+pub struct FrequencyResultDto {
+    pub frequency_hz: f64,
+    pub receivers: Vec<ReceiverResultDto>,
+    pub solve_time_ms: u128,
+}
+
+#[derive(Debug, Serialize, Clone)]
+pub struct MultiFreqSolveResponseDto {
+    pub domain: DomainDto,
+    /// In the same order as the requested `frequencies_hz`.
+    pub results: Vec<FrequencyResultDto>,
+    pub solve_time_ms: u128,
+}
+
+fn build_multifreq_requests(req: &MultiFreqSolveRequestDto) -> Result<Vec<solver::SolveRequest>, ApiError> {
+    if req.frequencies_hz.is_empty() {
+        return Err(ApiError::Validation("frequencies_hz must not be empty".into()));
+    }
+    if let Some(f) = req.frequencies_hz.iter().find(|f| !f.is_finite() || **f <= 0.0) {
+        return Err(ApiError::Validation(format!("invalid frequency {f}: must be finite and > 0")));
+    }
+    let (domain, permittivity) = build_domain_and_permittivity(req.domain, &req.permittivity_re, &req.permittivity_im)?;
+    let receivers: Vec<(f64, f64)> = req.receivers.iter().map(|p| (p.x, p.y)).collect();
+    let solver_params = req.solver.unwrap_or_default();
+
+    Ok(req
+        .frequencies_hz
+        .iter()
+        .map(|&frequency_hz| solver::SolveRequest {
+            domain,
+            medium: Medium {
+                frequency_hz,
+                background_permittivity: req.background_permittivity.into(),
+            },
+            permittivity: permittivity.clone(),
+            incident: build_incident(req.incident_angle_deg, req.source_position),
+            receivers: receivers.clone(),
+            restart: solver_params.restart.unwrap_or(30),
+            max_iter: solver_params.max_iter.unwrap_or(500),
+            tol: solver_params.tol.unwrap_or(1e-6),
+        })
+        .collect())
+}
+
+fn run_receivers_only_solve(solve_req: solver::SolveRequest) -> Result<FrequencyResultDto, String> {
+    let start = std::time::Instant::now();
+    let result = solver::solve(&solve_req)?;
+    Ok(FrequencyResultDto {
+        frequency_hz: solve_req.medium.frequency_hz,
+        receivers: receiver_results(&solve_req.receivers, &result),
+        solve_time_ms: start.elapsed().as_millis(),
+    })
+}
+
+/// Server-wide cap on concurrent multi-frequency solves, one per core.
+static SOLVE_PERMITS: std::sync::LazyLock<Arc<tokio::sync::Semaphore>> = std::sync::LazyLock::new(|| {
+    let cores = std::thread::available_parallelism().map_or(1, |n| n.get());
+    Arc::new(tokio::sync::Semaphore::new(cores))
+});
+
+async fn multifreq_solve_handler(
+    axum::Json(req): axum::Json<MultiFreqSolveRequestDto>,
+) -> Result<axum::Json<MultiFreqSolveResponseDto>, ApiError> {
+    let solve_reqs = build_multifreq_requests(&req)?;
+    let start = std::time::Instant::now();
+
+    // Frequencies are independent, so solve them concurrently on the blocking
+    // pool. The cap is shared across requests so several concurrent long
+    // frequency lists don't oversubscribe the CPU.
+    let handles: Vec<_> = solve_reqs
+        .into_iter()
+        .map(|solve_req| {
+            let permits = SOLVE_PERMITS.clone();
+            tokio::spawn(async move {
+                let _permit = permits.acquire_owned().await.expect("semaphore closed");
+                tokio::task::spawn_blocking(move || run_receivers_only_solve(solve_req)).await
+            })
+        })
+        .collect();
+
+    let mut results = Vec::with_capacity(handles.len());
+    for (handle, &frequency_hz) in handles.into_iter().zip(req.frequencies_hz.iter()) {
+        let outcome = handle
+            .await
+            .map_err(|e| ApiError::Internal(format!("solver task panicked: {e}")))?
+            .map_err(|e| ApiError::Internal(format!("solver task panicked: {e}")))?
+            .map_err(|e| ApiError::Validation(format!("solve at {frequency_hz} Hz failed: {e}")))?;
+        results.push(outcome);
+    }
+
+    Ok(axum::Json(MultiFreqSolveResponseDto {
+        domain: req.domain,
+        results,
+        solve_time_ms: start.elapsed().as_millis(),
+    }))
 }
 
 // ---- synchronous endpoint (handy for quick tests / small grids) ----
@@ -297,6 +441,7 @@ pub fn app() -> Router {
     Router::new()
         .route("/api/health", get(health_handler))
         .route("/api/solve", post(solve_handler))
+        .route("/api/solve/multifreq", post(multifreq_solve_handler))
         .route("/api/jobs", post(create_job_handler))
         .route("/api/jobs/{job_id}", get(get_job_handler))
         .with_state(state)
