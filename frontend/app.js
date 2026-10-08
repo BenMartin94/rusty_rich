@@ -37,7 +37,7 @@ function resetGrid() {
   grid.im = new Float64Array(nx * ny).fill(bg.im);
   lastSolve = null;
 
-  redraw();
+  syncAnimation();
   scheduleSolve(150);
 }
 
@@ -52,7 +52,24 @@ function permittivityColor(value, bgValue) {
   return `rgb(${r},${g},${b})`;
 }
 
-// A handful of viridis-ish control points, linearly interpolated.
+function interpolateStops(t, stops) {
+  t = Math.max(0, Math.min(1, t));
+  for (let k = 0; k < stops.length - 1; k++) {
+    const [t0, r0, g0, b0] = stops[k];
+    const [t1, r1, g1, b1] = stops[k + 1];
+    if (t >= t0 && t <= t1) {
+      const f = (t - t0) / (t1 - t0);
+      const r = Math.round(r0 + f * (r1 - r0));
+      const g = Math.round(g0 + f * (g1 - g0));
+      const b = Math.round(b0 + f * (b1 - b0));
+      return `rgb(${r},${g},${b})`;
+    }
+  }
+  const [, r, g, b] = stops[stops.length - 1];
+  return `rgb(${r},${g},${b})`;
+}
+
+// A handful of viridis-ish control points, for magnitude (0..1) plots.
 const VIRIDIS_STOPS = [
   [0.0, 68, 1, 84],
   [0.25, 59, 82, 139],
@@ -62,19 +79,20 @@ const VIRIDIS_STOPS = [
 ];
 
 function fieldColor(t) {
-  t = Math.max(0, Math.min(1, t));
-  for (let k = 0; k < VIRIDIS_STOPS.length - 1; k++) {
-    const [t0, r0, g0, b0] = VIRIDIS_STOPS[k];
-    const [t1, r1, g1, b1] = VIRIDIS_STOPS[k + 1];
-    if (t >= t0 && t <= t1) {
-      const f = (t - t0) / (t1 - t0);
-      const r = Math.round(r0 + f * (r1 - r0));
-      const g = Math.round(g0 + f * (g1 - g0));
-      const b = Math.round(b0 + f * (b1 - b0));
-      return `rgb(${r},${g},${b})`;
-    }
-  }
-  return `rgb(253,231,37)`;
+  return interpolateStops(t, VIRIDIS_STOPS);
+}
+
+// A blue-white-red diverging scale for signed, time-harmonic snapshots.
+const DIVERGING_STOPS = [
+  [0.0, 33, 102, 172],
+  [0.25, 103, 169, 207],
+  [0.5, 247, 247, 247],
+  [0.75, 239, 138, 98],
+  [1.0, 178, 24, 43],
+];
+
+function divergingColor(t) {
+  return interpolateStops(t, DIVERGING_STOPS);
 }
 
 // --- Rendering ----------------------------------------------------------
@@ -112,7 +130,36 @@ function drawContrastOutline(cellW, cellH) {
   }
 }
 
-function redraw() {
+// "-anim" modes reinterpret the same complex field as a time-harmonic
+// snapshot Re(E * e^{-i*omega*t}) = |E| cos(phase(E) - omega*t), animated by
+// sweeping omega*t, instead of collapsing it to a static |E| magnitude.
+function isAnimatedMode(mode) {
+  return mode === "total-anim" || mode === "scattered-anim";
+}
+
+function fieldForMode(mode) {
+  if (mode === "total" || mode === "total-anim") return "total_field";
+  if (mode === "scattered" || mode === "scattered-anim") return "scattered_field";
+  return null;
+}
+
+// The color scale for the time-harmonic view: normalizing by the true max
+// magnitude lets a single hot cell (common right next to a painted
+// high-contrast blob) wash out the color range everywhere else, so the rest
+// of the canvas barely shifts and the animation looks static. Using a high
+// percentile instead lets rare outliers saturate to solid red/blue rather
+// than flattening everyone else's contrast. Computed once per solve, not
+// per animation frame, since it doesn't depend on phase.
+function animationScale(field) {
+  const n = field.re.length;
+  const mag = new Float64Array(n);
+  for (let k = 0; k < n; k++) mag[k] = Math.hypot(field.re[k], field.im[k]);
+  mag.sort();
+  const scale = mag[Math.min(n - 1, Math.floor(0.98 * n))];
+  return scale > 1e-12 ? scale : 1;
+}
+
+function redraw(animPhase = 0) {
   const { nx, ny } = grid;
   if (nx === 0 || ny === 0) return;
   const cellW = canvas.width / nx;
@@ -120,9 +167,34 @@ function redraw() {
   const bg = backgroundValues();
 
   const mode = el("display-mode").value;
+  const fieldKey = fieldForMode(mode);
   let fieldGrid = null;
-  if (mode !== "contrast" && lastSolve && lastSolve.nx === nx && lastSolve.ny === ny) {
-    fieldGrid = mode === "total" ? lastSolve.result.total_field : lastSolve.result.scattered_field;
+  if (fieldKey && lastSolve && lastSolve.nx === nx && lastSolve.ny === ny) {
+    fieldGrid = lastSolve.result[fieldKey];
+  }
+
+  // Only actually animate once a matching solve has landed; otherwise fall
+  // through to the static/contrast rendering below instead of crashing on a
+  // null fieldGrid (which would silently kill the requestAnimationFrame loop).
+  const animated = isAnimatedMode(mode) && !!fieldGrid;
+
+  if (animated) {
+    const scale = mode === "total-anim" ? lastSolve.totalScale : lastSolve.scatteredScale;
+    const cosPhase = Math.cos(animPhase);
+    const sinPhase = Math.sin(animPhase);
+    for (let i = 0; i < nx; i++) {
+      for (let j = 0; j < ny; j++) {
+        const idx = i * ny + j;
+        const instantaneous = fieldGrid.re[idx] * cosPhase + fieldGrid.im[idx] * sinPhase;
+        ctx.fillStyle = divergingColor(instantaneous / scale / 2 + 0.5);
+        ctx.fillRect(i * cellW, j * cellH, Math.ceil(cellW), Math.ceil(cellH));
+      }
+    }
+    drawContrastOutline(cellW, cellH);
+    ctx.fillStyle = "rgba(255,255,255,0.85)";
+    ctx.font = "14px monospace";
+    ctx.fillText(`ωt = ${Math.round((animPhase * 180) / Math.PI)}°`, 8, 18);
+    return;
   }
 
   let mag = null;
@@ -147,6 +219,46 @@ function redraw() {
   }
 
   if (fieldGrid) drawContrastOutline(cellW, cellH);
+}
+
+// --- Time-harmonic animation loop ---------------------------------------
+
+let animFrameHandle = null;
+const ANIMATION_PERIOD_MS = 2500; // wall-clock time for one full oscillation
+
+function animationStep(startTime) {
+  return (now) => {
+    // Always reschedule, even if redraw() throws - a single bad frame
+    // shouldn't permanently kill the loop (and would otherwise leave
+    // animFrameHandle stuck non-null, blocking any future restart).
+    try {
+      const phase = (((now - startTime) / ANIMATION_PERIOD_MS) * 2 * Math.PI) % (2 * Math.PI);
+      redraw(phase);
+    } finally {
+      animFrameHandle = requestAnimationFrame(animationStep(startTime));
+    }
+  };
+}
+
+function startAnimation() {
+  if (animFrameHandle !== null) return;
+  animFrameHandle = requestAnimationFrame(animationStep(performance.now()));
+}
+
+function stopAnimation() {
+  if (animFrameHandle !== null) {
+    cancelAnimationFrame(animFrameHandle);
+    animFrameHandle = null;
+  }
+}
+
+function syncAnimation() {
+  if (isAnimatedMode(el("display-mode").value)) {
+    startAnimation();
+  } else {
+    stopAnimation();
+    redraw();
+  }
 }
 
 function paintAt(clientX, clientY) {
@@ -192,7 +304,7 @@ window.addEventListener("pointerup", () => {
 
 el("apply-domain").addEventListener("click", resetGrid);
 el("clear-grid").addEventListener("click", resetGrid);
-el("display-mode").addEventListener("change", redraw);
+el("display-mode").addEventListener("change", syncAnimation);
 
 for (const id of ["bg-re", "bg-im", "frequency", "incident-angle", "solver-restart", "solver-max-iter", "solver-tol"]) {
   el(id).addEventListener("change", () => scheduleSolve(150));
@@ -288,9 +400,15 @@ async function runSolve() {
     };
 
     const result = await submitJob(payload);
-    lastSolve = { nx, ny, result };
+    lastSolve = {
+      nx,
+      ny,
+      result,
+      totalScale: animationScale(result.total_field),
+      scatteredScale: animationScale(result.scattered_field),
+    };
     setStatus(`Done in ${result.solve_time_ms} ms`, "ok");
-    redraw();
+    syncAnimation();
   } catch (err) {
     setStatus(`Error: ${err.message}`, "error");
   }
