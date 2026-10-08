@@ -274,26 +274,46 @@ pub fn gmres_solve(
         final_residual = stats.final_residual,
         "GMRES solve finished"
     );
+    // kryst reports hitting max_iter as a stop reason, not an error, so check
+    // it here rather than silently returning an unconverged field.
+    if !stats.reason.is_converged() {
+        return Err(format!(
+            "GMRES did not converge: {:?} after {} iterations, residual {:.3e} (tol {tol:.1e})",
+            stats.reason, stats.iterations, stats.final_residual
+        ));
+    }
     Ok(DMatrix::from_vec(domain.nx, domain.ny, x))
 }
 
-/// Plane wave traveling at `angle_rad` (0 = +x direction), phase-referenced
-/// to the domain center.
-pub fn inc_field(domain: &Domain, k_b: Complex<f64>, angle_rad: f64) -> DMatrix<Complex<f64>> {
-    let (nx, ny) = (domain.nx, domain.ny);
-    let (dx, dy) = (domain.dx(), domain.dy());
-    let (cx, cy) = domain.center();
-    let (cos_t, sin_t) = (angle_rad.cos(), angle_rad.sin());
-    let mut u_inc = DMatrix::<Complex<f64>>::zeros(nx, ny);
-    for i in 0..nx {
-        for j in 0..ny {
-            let x_i = dx * i as f64;
-            let y_j = dy * j as f64;
-            let phase = (x_i - cx) * cos_t + (y_j - cy) * sin_t;
-            u_inc[(i, j)] = (Complex::new(0.0, -1.0) * k_b * Complex::new(phase, 0.0)).exp();
-        }
+/// The incident illumination.
+#[derive(Clone, Copy, Debug)]
+pub enum IncidentWave {
+    /// Unit-amplitude plane wave traveling at `angle_rad` (0 = +x direction),
+    /// phase-referenced to the domain center.
+    PlaneWave { angle_rad: f64 },
+    /// Unit line source at `(x, y)`: the 2D Green's function
+    /// `-j/4 * H0^(2)(k_b * rho)`, consistent with the scattered-field kernel.
+    PointSource { x: f64, y: f64 },
+}
+
+/// Line-source field at `obs`. At the source itself the Green's function is
+/// singular, so within `a` of it we use the average over a disk of radius `a`
+/// (the same equivalent-circle cell model used for the kernel self-term).
+fn point_source_at(k_b: Complex<f64>, src: (f64, f64), obs: (f64, f64), a: f64) -> Complex<f64> {
+    let distance = ((obs.0 - src.0).powi(2) + (obs.1 - src.1).powi(2)).sqrt();
+    if distance < a * 1e-6 {
+        let ka = k_b * a;
+        Complex::new(0.0, -0.5) * hankel2(1.0, ka).unwrap() / ka - 1.0 / (PI * ka * ka)
+    } else {
+        Complex::new(0.0, -0.25) * hankel2(0.0, k_b * distance).unwrap()
     }
-    u_inc
+}
+
+pub fn inc_field(domain: &Domain, k_b: Complex<f64>, incident: IncidentWave) -> DMatrix<Complex<f64>> {
+    let (dx, dy) = (domain.dx(), domain.dy());
+    DMatrix::<Complex<f64>>::from_fn(domain.nx, domain.ny, |i, j| {
+        inc_at_obs(domain, k_b, (dx * i as f64, dy * j as f64), incident)
+    })
 }
 
 pub fn scat_at_obs(
@@ -319,10 +339,18 @@ pub fn scat_at_obs(
     scattered
 }
 
-pub fn inc_at_obs(domain: &Domain, k_b: Complex<f64>, obs: (f64, f64), angle_rad: f64) -> Complex<f64> {
-    let (cx, cy) = domain.center();
-    let phase = (obs.0 - cx) * angle_rad.cos() + (obs.1 - cy) * angle_rad.sin();
-    (Complex::new(0.0, -1.0) * k_b * Complex::new(phase, 0.0)).exp()
+pub fn inc_at_obs(domain: &Domain, k_b: Complex<f64>, obs: (f64, f64), incident: IncidentWave) -> Complex<f64> {
+    match incident {
+        IncidentWave::PlaneWave { angle_rad } => {
+            let (cx, cy) = domain.center();
+            let phase = (obs.0 - cx) * angle_rad.cos() + (obs.1 - cy) * angle_rad.sin();
+            (Complex::new(0.0, -1.0) * k_b * Complex::new(phase, 0.0)).exp()
+        }
+        IncidentWave::PointSource { x, y } => {
+            let a = (domain.dx() * domain.dy() / PI).sqrt();
+            point_source_at(k_b, (x, y), obs, a)
+        }
+    }
 }
 
 pub fn sample_tot(domain: &Domain, points: &[(f64, f64)], u_tot: &DMatrix<Complex<f64>>) -> Vec<Complex<f64>> {
@@ -370,8 +398,8 @@ pub fn receiver_data(
     receivers.iter().map(|&r| scat_at_obs(domain, k_b, contrast, u_tot, r)).collect()
 }
 
-pub fn inc_at_receivers(domain: &Domain, k_b: Complex<f64>, receivers: &[(f64, f64)], angle_rad: f64) -> Vec<Complex<f64>> {
-    receivers.iter().map(|&r| inc_at_obs(domain, k_b, r, angle_rad)).collect()
+pub fn inc_at_receivers(domain: &Domain, k_b: Complex<f64>, receivers: &[(f64, f64)], incident: IncidentWave) -> Vec<Complex<f64>> {
+    receivers.iter().map(|&r| inc_at_obs(domain, k_b, r, incident)).collect()
 }
 
 pub fn echo_width(u_scat: &[Complex<f64>], u_inc: &[Complex<f64>], rho: f64, lambda: f64) -> Vec<f64> {
@@ -389,8 +417,7 @@ pub struct SolveRequest {
     /// Absolute permittivity at every grid cell, `nx * ny` entries indexed
     /// `i * ny + j` (row-major over the (i, j) grid used throughout).
     pub permittivity: Vec<Complex<f64>>,
-    /// Incident plane wave direction, radians, 0 = +x.
-    pub incident_angle_rad: f64,
+    pub incident: IncidentWave,
     pub receivers: Vec<(f64, f64)>,
     pub restart: usize,
     pub max_iter: usize,
@@ -419,12 +446,12 @@ pub fn solve(req: &SolveRequest) -> Result<SolveResult, String> {
     let k_b = req.medium.k_b();
 
     let kernel = build_kernel(domain, k_b);
-    let u_inc = inc_field(domain, k_b, req.incident_angle_rad);
+    let u_inc = inc_field(domain, k_b, req.incident);
     let u_tot = gmres_solve(domain, &kernel, &contrast_matrix, &u_inc, req.restart, req.max_iter, req.tol)?;
     let u_scat = &u_tot - &u_inc;
 
     let receiver_scattered = receiver_data(domain, k_b, &contrast_matrix, &u_tot, &req.receivers);
-    let receiver_incident = inc_at_receivers(domain, k_b, &req.receivers, req.incident_angle_rad);
+    let receiver_incident = inc_at_receivers(domain, k_b, &req.receivers, req.incident);
 
     Ok(SolveResult {
         total_field: u_tot,
